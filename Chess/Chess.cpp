@@ -25,29 +25,20 @@ public:
 	sf::Vector2f center;
 	int move;
 	int is_moving;
-	std::array<sf::Vector2i, 8> toedge;
+	std::vector<sf::Vector2i> toedge;
 	Square() {
 		piece = 0;
 		center = sf::Vector2f(0.0f, 0.0f);
 		move = 0;
 		is_moving = 0;
-		toedge = {
-			sf::Vector2i(-8, 0),
-			sf::Vector2i(-7, 0),
-			sf::Vector2i(1, 0),
-			sf::Vector2i(9, 0),
-			sf::Vector2i(8, 0),
-			sf::Vector2i(7, 0),
-			sf::Vector2i(-1, 0),
-			sf::Vector2i(-9, 0)
-		};
+		toedge = {};
 	}
 };
 
 int main() {
 	//1600, 1024
-	//const char startingFEN [44] = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
-	const char startingFEN[53] = "r3kb1r/1pp2p1p/p4pp1/4n1n1/3P4/2P1P3/P1B2PPP/R1B2RK1";
+	const char startingFEN [44] = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+	//const char startingFEN[53] = "r3kb1r/1pp2p1p/p4pp1/4n1n1/3P4/2P1P3/P1B2PPP/R1B2RK1";
 
 	//board
 
@@ -77,6 +68,22 @@ int main() {
 	lightsquareleft.setFillColor(sf::Color(130, 151, 105));
 	darksquareattack.setFillColor(sf::Color(206, 46, 34, 140));
 	lightsquareattack.setFillColor(sf::Color(241, 27, 10, 140));
+
+	//font
+	sf::Font font;
+
+	if (!font.loadFromFile("ArialCE.ttf")) {
+		std::cout << "Font load failed!" << std::endl;
+	}
+
+	//text
+	sf::Text text;
+	text.setFont(font);
+	text.setString("Checkmate!");
+	text.setCharacterSize(40);
+	text.setFillColor(sf::Color::Black);
+	text.setStyle(sf::Text::Bold);
+	text.setPosition(sf::Vector2f(850, 340));
 
 	//creating space for textures
 	sf::Texture texture_w_pawn;
@@ -203,25 +210,28 @@ int main() {
 	texture_b_queen.setSmooth(true);
 
 	//variables
-	unsigned long long board = 18446462598732906495;
 	bool start = true;
 	bool calculated = false;
+	bool mate = false;
 	int moving_piece = 0;
 	int turn = 0;
 	int oldsquare = 0;
 	int klatka = 0;
 
-	std::vector<sf::Vector2i> moves;
+	std::vector<int> moves;
+	std::vector<int> legal_moves;
 
-	std::vector<sf::Vector2i> calculatemoves(int, std::array<sf::Vector2i, 8>, Square[65]);
+	std::vector<int> calculatemoves(int, std::vector<sf::Vector2i>, Square[65], int);
+	std::vector<int> calculate_check(Square[65], std::vector<int>, int, int, int);
+	bool is_checkmate(Square[65], int);
 
 	while (window.isOpen()) {
 
 		sf::Event evnt;
 
 		sf::Vector2i pos = sf::Mouse::getPosition(window);
-		int x = ceil(((pos.x - 100) / 90)+1);
-		int y = ceil(((pos.y - 10) / 90)+1);
+		int x = ceil((pos.x - 100) / 90) + 1;
+		int y = ceil((pos.y - 10) / 90) + 1;
 
 		while (window.pollEvent(evnt)) {
 
@@ -236,8 +246,8 @@ int main() {
 
 					//is there some piece?
 					int position = 8 * (y-1) + x;
+					calculated = false;
 					if (Squares[position].piece != 0) {
-						calculated = false;
 						oldsquare = position;
 						if (Squares[position].piece == 9 && turn == 0) {
 							Squares[position].is_moving = Squares[position].piece;
@@ -306,34 +316,78 @@ int main() {
 			//move
 			if (evnt.type == evnt.MouseButtonReleased) {
 				if (moving_piece != 0) {
-					int position = 8 * (y - 1) + x;
-					if (moving_piece != Squares[position].is_moving) {
-						if (moving_piece < 8 && Squares[position].piece < 8 && Squares[position].piece > 0) {
-							Squares[oldsquare].piece = moving_piece;
-						}
-						else if (moving_piece > 8 && Squares[position].piece > 8) {
-							Squares[oldsquare].piece = moving_piece;
-						}
-						else {
-							Squares[position].piece = moving_piece;
-							if (turn == 0) {
-								turn = 1;
-							}
-							else {
-								turn = 0;
-							}
-						}
-					}
-					else {
+					if (pos.x < 100 or pos.x > 900 or pos.y < 10 or pos.y > 810) {
 						Squares[oldsquare].piece = moving_piece;
 					}
-					moving_piece = 0;
-					oldsquare = 0;
-					for (int i = 1; i < 65; i++) {
-						if (Squares[i].is_moving != 0) {
-							Squares[i].is_moving = 0;
-							break;
+					else {
+						int position = 8 * (y - 1) + x;
+						bool moved = false;
+						if (moving_piece != Squares[position].is_moving) {
+							for (unsigned int i = 0; i < legal_moves.size(); i++) {
+								if (position == legal_moves[i]) {
+									if (moving_piece == 9) {
+										if (position - oldsquare == -2) {
+											Squares[57].piece = 0;
+											Squares[57].move = 1;
+											Squares[60].piece = 13;
+										}
+										if (position - oldsquare == 2) {
+											Squares[64].piece = 0;
+											Squares[64].move = 1;
+											Squares[62].piece = 13;
+										}
+									}
+									if (moving_piece == 17) {
+										if (position - oldsquare == -2) {
+											Squares[1].piece = 0;
+											Squares[1].move = 1;
+											Squares[4].piece = 21;
+										}
+										if (position - oldsquare == 2) {
+											Squares[8].piece = 0;
+											Squares[8].move = 1;
+											Squares[6].piece = 21;
+										}
+									}
+									moved = true;
+									Squares[position].piece = moving_piece;
+									Squares[position].move = 1;
+									Squares[oldsquare].move = 1;
+									Squares[position].toedge = Squares[oldsquare].toedge;
+									Squares[position].piece = moving_piece;
+									if (turn == 0) {
+										turn = 1;
+										mate = is_checkmate(Squares, turn);
+										if (mate == true) {
+											std::cout << "Checkmate" << std::endl;
+											text.setFillColor(sf::Color::White);
+										}
+									}
+									else {
+										turn = 0;
+										mate = is_checkmate(Squares, turn);
+										if (mate == true) {
+											std::cout << "Checkmate" << std::endl;
+											text.setFillColor(sf::Color::White);
+										}
+									}
+									break;
+								}
+							}
+							if (!moved) {
+								Squares[oldsquare].piece = moving_piece;
+							}
 						}
+						else {
+							Squares[oldsquare].piece = moving_piece;
+						}
+					}
+				}
+				moving_piece = 0;
+				oldsquare = 0;
+				for (int i = 1; i < 65; i++) {
+					if (Squares[i].is_moving != 0) {
+						Squares[i].is_moving = 0;
 					}
 				}
 			}
@@ -385,62 +439,162 @@ int main() {
 						if (letter == *"P") {
 							w_pawn.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(w_pawn);
+							if (i < 48 or i > 56) {
+								Squares[i].move = 1;
+							}
 							Squares[i].piece = 10;
+							Squares[i].toedge = {
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(-7, 0),
+								sf::Vector2i(-9, 0)
+							};
 						}
 						if (letter == *"R") {
 							w_rook.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(w_rook);
 							Squares[i].piece = 13;
+							Squares[i].toedge = {
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(1, 0),
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(-1, 0)
+							};
 						}
 						if (letter == *"B") {
 							w_bishop.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(w_bishop);
 							Squares[i].piece = 12;
+							Squares[i].toedge = {
+								sf::Vector2i(-9, 0),
+								sf::Vector2i(9, 0),
+								sf::Vector2i(7, 0),
+								sf::Vector2i(-7, 0)
+							};
 						}
 						if (letter == *"N") {
 							w_knight.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(w_knight);
 							Squares[i].piece = 11;
+							Squares[i].toedge = {
+								sf::Vector2i(-15, 0),
+								sf::Vector2i(-6, 0),
+								sf::Vector2i(10, 0),
+								sf::Vector2i(17, 0),
+								sf::Vector2i(15, 0),
+								sf::Vector2i(6, 0),
+								sf::Vector2i(-10, 0),
+								sf::Vector2i(-17, 0),
+							};
 						}
 						if (letter == *"K") {
 							w_king.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(w_king);
 							Squares[i].piece = 9;
+							Squares[i].toedge = {
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(-7, 0),
+								sf::Vector2i(1, 0),
+								sf::Vector2i(9, 0),
+								sf::Vector2i(8, 0),
+								sf::Vector2i(7, 0),
+								sf::Vector2i(-1, 0),
+								sf::Vector2i(-9, 0)
+							};
 						}
 						if (letter == *"Q") {
 							w_queen.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(w_queen);
 							Squares[i].piece = 14;
+							Squares[i].toedge = {
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(-7, 0),
+								sf::Vector2i(1, 0),
+								sf::Vector2i(9, 0),
+								sf::Vector2i(8, 0),
+								sf::Vector2i(7, 0),
+								sf::Vector2i(-1, 0),
+								sf::Vector2i(-9, 0)
+							};
 						}
 						if (letter == *"p") {
 							b_pawn.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(b_pawn);
 							Squares[i].piece = 18;
+							if (i < 9 or i > 16) {
+								Squares[i].move = 1;
+							}
+							Squares[i].toedge = {
+								sf::Vector2i(8, 0),
+								sf::Vector2i(7, 0),
+								sf::Vector2i(9, 0)
+							};
 						}
 						if (letter == *"r") {
 							b_rook.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(b_rook);
 							Squares[i].piece = 21;
+							Squares[i].toedge = {
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(1, 0),
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(-1, 0)
+							};
 						}
 						if (letter == *"n") {
 							b_knight.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(b_knight);
 							Squares[i].piece = 19;
+							Squares[i].toedge = {
+								sf::Vector2i(-15, 0),
+								sf::Vector2i(-6, 0),
+								sf::Vector2i(10, 0),
+								sf::Vector2i(17, 0),
+								sf::Vector2i(15, 0),
+								sf::Vector2i(6, 0),
+								sf::Vector2i(-10, 0),
+								sf::Vector2i(-17, 0),
+							};
 						}
 						if (letter == *"b") {
 							b_bishop.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(b_bishop);
 							Squares[i].piece = 20;
+							Squares[i].toedge = {
+								sf::Vector2i(-9, 0),
+								sf::Vector2i(9, 0),
+								sf::Vector2i(7, 0),
+								sf::Vector2i(-7, 0)
+							};
 						}
 						if (letter == *"k") {
 							b_king.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(b_king);
 							Squares[i].piece = 17;
+							Squares[i].toedge = {
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(-7, 0),
+								sf::Vector2i(1, 0),
+								sf::Vector2i(9, 0),
+								sf::Vector2i(8, 0),
+								sf::Vector2i(7, 0),
+								sf::Vector2i(-1, 0),
+								sf::Vector2i(-9, 0)
+							};
 						}
 						if (letter == *"q") {
 							b_queen.setPosition((liczba.rem * 90.0f) + 100.0f, (liczba.quot * 90.0f) + 10.0f);
 							window.draw(b_queen);
 							Squares[i].piece = 22;
+							Squares[i].toedge = {
+								sf::Vector2i(-8, 0),
+								sf::Vector2i(-7, 0),
+								sf::Vector2i(1, 0),
+								sf::Vector2i(9, 0),
+								sf::Vector2i(8, 0),
+								sf::Vector2i(7, 0),
+								sf::Vector2i(-1, 0),
+								sf::Vector2i(-9, 0)
+							};
 						}
 						i++;
 					}
@@ -459,6 +613,8 @@ int main() {
 				pole.x = (liczba.rem * 90.0f) + 100.0f;
 				pole.y = (liczba.quot * 90.0f) + 10.0f;
 				switch (Squares[i].piece) {
+				case 0:
+					continue;
 				case 9:
 					w_king.setPosition(pole);
 					window.draw(w_king);
@@ -601,19 +757,14 @@ int main() {
 
 		//calculating possible moves
 		if (moving_piece != 0) {
-			std::cout << oldsquare << std::endl;
 			if (!calculated) {
-				moves = calculatemoves(oldsquare, Squares[oldsquare].toedge, Squares);
+				moves = calculatemoves(oldsquare, Squares[oldsquare].toedge, Squares, moving_piece);
+				legal_moves = calculate_check(Squares, moves, turn, oldsquare, moving_piece);
 				calculated = true;
 			}
-			for (int i = 0; i < 8; i++) {
-				int liczba = oldsquare;
-				std::cout << "X : " << moves[i].x << "Y : " << moves[i].y << std::endl;
-				for (int k = 0; k < moves[i].y; k++) {
-					liczba = liczba + moves[i].x;
-					darksquareattack.setPosition(sf::Vector2f(Squares[liczba].center));
-					window.draw(darksquareattack);
-				}
+			for (unsigned int i = 0; i < legal_moves.size(); i++) {
+				darksquareattack.setPosition(sf::Vector2f(Squares[legal_moves[i]].center));
+				window.draw(darksquareattack);
 			}
 		}
 		
@@ -670,6 +821,9 @@ int main() {
 				window.draw(b_queen);
 			}
 		}
+		if (mate == true) {
+			window.draw(text);
+		}
 
 		window.display();
 		//Sleep(1000000);
@@ -683,45 +837,208 @@ int main() {
 }
 
 
-std::vector<sf::Vector2i> calculatemoves(int square, std::array<sf::Vector2i, 8> toedge, Square Squares[65]) {
-	std::vector <sf::Vector2i> result;
-	int piece = Squares[square].piece;
+std::vector<int> calculatemoves(int square, std::vector<sf::Vector2i> toedge, Square Squares[65], int piece) {
+	std::vector <int> result;
 	int original_square = square;
-	for (int i = 1; i < 9; i++) {
+	bool koniec = false;
+	for (unsigned int i = 0; i < toedge.size(); i++) {
 		square = original_square;
-		div_t liczba = div(square, 8);
-		int rank = liczba.quot + 1;
-		int file = liczba.rem;
-		int br = 0;
-		while (file > 0 && file < 9 && rank > 0 && rank < 9 && br == 0) {
-			square = square + toedge[i-1].x;
-			div_t liczba = div(square, 8);
-			rank = liczba.quot + 1;
-			file = liczba.rem;
+		div_t liczba = div (square - 1, 8);
+		int file = liczba.rem + 1;
+		int oldfile = file;
+		while (true) {
+			square = square + toedge[i].x;
+			div_t liczba = div(square - 1, 8);
+			file = liczba.rem + 1;
 			if (square < 0 or square > 64) {
-				br = 1;
-			}
-			if (piece < 8 && Squares[square].piece < 8 && Squares[square].piece > 0) {
 				break;
-				br = 1;
 			}
-			else if (piece > 8 && Squares[square].piece > 8) {
+			if (abs(file - oldfile) > 2) {
 				break;
-				br = 1;
 			}
-			if (Squares[square].piece == 0 && br == 0) {
-				toedge[i - 1].y += 1;
+			if (piece < 16 && Squares[square].piece < 16 && Squares[square].piece > 0) {
+				break;
 			}
-			std::cout << toedge[i - 1].y << std::endl;
-			std::cout << "File: " << file << std::endl;
-			std::cout << "Rank: " << rank << std::endl;
+			else if (piece < 16 && Squares[square].piece > 16 && piece != 10 && piece != 18) {
+				result.push_back(square);
+				break;
+			}
+			else if (piece > 16 && Squares[square].piece > 16) {
+				break;
+			}
+			else if (piece > 16 && Squares[square].piece < 16 && Squares[square].piece > 0 && piece != 10 && piece != 18) {
+				result.push_back(square);
+				break;
+			}
+			if (Squares[square].piece == 0) {
+				result.push_back(square);
+			}
+			if (piece == 9 or piece == 11 or piece == 17 or piece == 19) {
+				break;
+			}
+			if (koniec) {
+				i = 2;
+				break;
+			}
+			if ((piece == 10 or piece == 18) && Squares[original_square].move == 1) {
+				i = 2;
+				break;
+			}
+			if ((piece == 10 or piece == 18) && Squares[original_square].move == 0) {
+				koniec = true;
+			}
+			oldfile = file;
 		}
-		std::cout << "I: "<< i << std::endl;
 	}
-
-	for (int i = 0; i < 8; i++)	{
-		result.push_back(toedge[i]);
+	if (piece == 10 or piece == 18) {
+		for (int i = 1; i < 3; i++) {
+			square = original_square;
+			square = square + toedge[i].x;
+			if (piece < 16 && Squares[square].piece > 16) {
+				result.push_back(square);
+			}
+			if (piece > 16 && Squares[square].piece < 16 && Squares[square].piece > 0) {
+				result.push_back(square);
+			}
+		}
+	}
+	if (piece == 9) {
+		square = original_square;
+		if (square == 61 && Squares[square].move == 0) {
+			if (Squares[64].piece == 13 && Squares[64].move == 0) {
+				bool okay = true;
+				for (int i = 62; i < 64; i++) {
+					if (Squares[i].piece != 0) {
+						okay = false;
+					}
+				}
+				if (okay) {
+					result.push_back(square + 2);
+				}
+			}
+			if (Squares[57].piece == 13 && Squares[57].move == 0) {
+				bool okay = true;
+				for (int i = 58; i < 61; i++) {
+					if (Squares[i].piece != 0) {
+						okay = false;
+					}
+				}
+				if (okay) {
+					result.push_back(square - 2);
+				}
+			}
+		}
+	}
+	if (piece == 17) {
+		square = original_square;
+		if (square == 5 && Squares[square].move == 0) {
+			if (Squares[8].piece == 21 && Squares[8].move == 0) {
+				bool okay = true;
+				for (int i = 6; i < 8; i++) {
+					if (Squares[i].piece != 0) {
+						okay = false;
+					}
+				}
+				if (okay) {
+					result.push_back(square);
+				}
+			}
+			if (Squares[1].piece == 21 && Squares[1].move == 0) {
+				bool okay = true;
+				for (int i = 1; i < 5; i++) {
+					if (Squares[i].piece != 0) {
+						okay = false;
+					}
+				}
+				if (okay) {
+					result.push_back(square);
+				}
+			}
+		}
 	}
 
 	return result;
+}
+
+std::vector<int> calculate_check(Square Squares[65],std::vector<int> moves, int turn, int square, int piece) {
+	std::vector<int> checks;
+	std::vector<int> to_delete;
+	int original_piece;
+	int number = 0;
+	if (turn == 0) {
+		for (unsigned int n = 0; n < moves.size(); n++) {
+			square = moves[n];
+			original_piece = Squares[square].piece;
+			Squares[square].piece = piece;
+			for (int i = 1; i < 65; i++) {
+				if (Squares[i].piece > 16) {
+					checks = calculatemoves(i, Squares[i].toedge, Squares, Squares[i].piece);
+					for (unsigned int z = 0; z < checks.size(); z++) {
+						if (Squares[checks[z]].piece == 9) {
+							to_delete.push_back(moves[n]);
+						}
+					}
+				}
+			}
+			Squares[square].piece = original_piece;
+		}
+	}
+	if (turn == 1) {
+		for (unsigned int n = 0; n < moves.size(); n++) {
+			square = moves[n];
+			original_piece = Squares[square].piece;
+			Squares[square].piece = piece;
+			for (int i = 1; i < 65; i++) {
+				if (Squares[i].piece < 16 && Squares[i].piece != 0) {
+					checks = calculatemoves(i, Squares[i].toedge, Squares, Squares[i].piece);
+					for (unsigned int z = 0; z < checks.size(); z++) {
+						if (Squares[checks[z]].piece == 17) {
+							to_delete.push_back(moves[n]);
+						}
+					}
+				}
+			}
+			Squares[square].piece = original_piece;
+		}
+	}
+	for (unsigned int q = 0; q < to_delete.size(); q++) {
+		for (unsigned int i = 0; i < moves.size(); i++) {
+			if (moves[i] == to_delete[q]) {
+				number = i;
+				break;
+			}
+		}
+		if (moves.size() != 0) {
+			moves.erase(moves.begin() + number);
+		}
+	}
+	return moves;
+}
+
+bool is_checkmate(Square Squares[65], int turn) {
+	std::vector<int> moves1;
+	std::vector<int> legal_moves1;
+	int number = 0;
+	bool is_mate = true;
+	for (int i = 1; i < 65; i++) {
+		if (turn == 0) {
+			if (Squares[i].piece < 16 && Squares[i].piece != 0) {
+				moves1 = calculatemoves(i, Squares[i].toedge, Squares, Squares[i].piece);
+				legal_moves1 = calculate_check(Squares, moves1, turn, i, Squares[i].piece);
+				if (legal_moves1.size() > 0) {
+					is_mate = false;
+				}
+			}
+		}
+		if (turn == 1) {
+			if (Squares[i].piece > 16) {
+				moves1 = calculatemoves(i, Squares[i].toedge, Squares, Squares[i].piece);
+				legal_moves1 = calculate_check(Squares, moves1, turn, i, Squares[i].piece);
+				if (legal_moves1.size() > 0) {
+					is_mate = false;
+				}
+			}
+		}
+	}
+	return is_mate;
 }
